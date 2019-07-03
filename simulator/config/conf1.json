@@ -1,0 +1,6 @@
+{
+    "heat_mass_capacity":9000000,
+    "heat_transmission": 200,
+    "maximum_heating_power":10000,
+    "initial_building_temperature": 19.0
+}

@@ -1,0 +1,20 @@
+{
+    "simulation_step_size_minute":12,
+    "prev_states_feature": 20,
+    "next_states_feature": 20,
+    "temperature_noise_sigma":0.03,
+    "power_noise_sigma":2,
+    "weather_prediction_sigma":0.4,
+    "schedule":[
+        [0,440, 22,25],
+        [440,960,14,25],
+        [960,1440,22,25]],
+    "energy_cost":[[0,360,23.55],
+                [360,1320,37.76],
+                [1320,1440,23.55]],
+    "model_file":"simulator/config/conf1.json",
+    "weather_file":"simulator/weather_data/temp_2016_2017_basel.csv",
+    "reward":{
+        "not_satisfy_penalty":1000000
+    }
+}
