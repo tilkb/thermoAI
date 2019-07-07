@@ -1,13 +1,21 @@
 # thermoAI
 
-This project is created to provide a general heating system controller with Reinforcement Learning
+This project is created to provide a general heating system controller with Reinforcement Learning. 
+
+Main goals:
+* Is it possible to controll with RL safely --> hold the temperatures in the predefined range
+* Is it possible to be more optimal --> reduce cost
 
 ## Modules
 ### Simulator
-This is he most important part of the training for the predefined heat-model and data-driven model-driven RL as well
+This is the most important part of the training for the predefined heat-model and data-driven model-based RL as well
 ### Controller
-The collection of well known controlling tools and RL tools
-### Real-World
-The collection of tools for real-world controlling
-* Deploying the controller to real world
-* Temperature datacollecting for creating heatmodel of the building
+The collection of well known controlling tools and RL tools.
+
+Controlling tools:
+* Classic controlling: 
+    * PID with minor modifications for this environment
+* Reinforcement learning (future):
+    * Deep Deterministic Policy Gradient
+    * PPO
+    * Soft Actor-Critic

@@ -1,5 +1,5 @@
 {
-    "simulation_step_size_minute":12,
+    "simulation_step_size_minute":15,
     "prev_states_feature": 20,
     "next_states_feature": 20,
     "temperature_noise_sigma":0.03,
