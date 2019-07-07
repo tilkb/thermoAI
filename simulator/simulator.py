@@ -51,6 +51,7 @@ class Simulator:
         self.historical_outside_temp = []
         self.current_time = 0
         self.total_cost = 0
+        self._last_heating_power = 0.0
         self.heat_model.set_inside_temperature(self._init_temperature)
         return self._get_state()
 
@@ -60,6 +61,7 @@ class Simulator:
         """
         power = max(0, np.random.normal(loc=action, scale=self.power_noise_sigma))
         heating_power, curr_inside_temp = self.heat_model.step(self.weather.get_out_temperature(self.time_step_size_minute * self.current_time), action)
+        self._last_heating_power = heating_power
         temp_from, temp_to = self.scheduler.get_target(self.time_step_size_minute * self.current_time)
         not_satisfy_penalty = 0 if temp_from <= curr_inside_temp and temp_to >= curr_inside_temp else -1000000
         reward = -power * self.price_scheduler.get_cost_at(self.time_step_size_minute * self.current_time) + not_satisfy_penalty

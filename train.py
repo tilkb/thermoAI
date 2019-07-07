@@ -5,7 +5,7 @@ from controller.PID.PIDController import PIDController
 def train_pid(sim_file):
     sim = Simulator.from_json(sim_file)
     pid = PIDController()
-    pid.train(sim)
+    pid.train(sim, response_step_count=10)
     with open('controller/saved/PID.pkl', 'wb') as f:
         pickle.dump(pid, f)
     print("saved PID saved...")

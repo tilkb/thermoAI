@@ -16,8 +16,7 @@ def eval(sim_path, models_path):
 
     stat = Statistics(sim, controllers)
     stat.print_result()
-    stat.plot_inside()
-    stat.plot_power()
+    stat.plot()
 
 
 
