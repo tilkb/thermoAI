@@ -18,7 +18,7 @@ class DDPGController:
         return self.ddpg.control(tf_state).numpy()[0,0] 
 
     def train(self, simulator):
-        gamma =0.95
+        gamma =0.8
         #collect data from PID controlling
         simulator.reset()
         for t in range(simulator.prev_states_count):
@@ -52,7 +52,7 @@ class DDPGController:
         q_value_dataset = tf.data.Dataset.from_tensor_slices((state_action,q_data))
         self.ddpg.pretrain(dataset,q_value_dataset)
         
-        #self.ddpg.train(simulator, simulator.prev_states_count, gamma=gamma)
+        self.ddpg.train(simulator, simulator.prev_states_count, gamma=gamma)
     def save(self,path):
         self.ddpg.actor.save(path+'DDPG_actor.h5')
         
@@ -73,12 +73,10 @@ class DDPG:
                     tf.keras.layers.Dense(1)
                     ], name="Critic")
 
-    def pretrain(self,dataset,q_value_dataset, epoch=10, objective='adversarial'):
+    def pretrain(self,dataset,q_value_dataset, epoch=40, objective='mae'):
         dataset =dataset.batch(64)
         q_value_dataset = q_value_dataset.batch(64)
         if objective == 'adversarial':
-            self.actor.compile(loss='mae', optimizer='adam')
-            self.actor.fit(dataset, epochs=epoch)
             disc = tf.keras.Sequential([
             tf.keras.layers.Dense(300, activation=tf.nn.relu),
             tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
@@ -117,8 +115,8 @@ class DDPG:
         else:
             self.actor.compile(loss=objective, optimizer='adam')
             self.actor.fit(dataset, epochs=epoch)
-            #self.critic.compile(loss='mse', optimizer='adam')
-            #self.critic.fit(q_value_dataset, epochs=epoch)
+            self.critic.compile(loss='mse', optimizer='adam')
+            self.critic.fit(q_value_dataset, epochs=epoch)
 
     
     def train(self, simulator, init_step=0,episode=30, batch_size=128, gamma=0.95):
@@ -140,7 +138,8 @@ class DDPG:
 
             done = False
             sum_reward=0.0
-            while not(done):
+            counter=0
+            while not(counter>100):#TODO done
                 #act in the simulator
                 state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
                 state = tf.reshape(state,(1,-1))
@@ -184,7 +183,7 @@ class DDPG:
             print(sum_reward,'...' ,noise)
         return commulative_reward_history
 
-    #@tf.function
+    @tf.function
     def q_value(self,model,state, action):
         concated = tf.concat([state, action], axis=-1)
         return model(concated)
