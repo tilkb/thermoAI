@@ -2,6 +2,7 @@ import os
 import pickle
 from simulator.statistics import Statistics
 from simulator.simulator import Simulator
+from controller.RL.DDPG import DDPGController
 
 def eval(sim_path, models_path):
     sim=Simulator.from_json(sim_path)
@@ -12,7 +13,9 @@ def eval(sim_path, models_path):
         with open(os.path.join(models_path, file_name), 'rb') as f:
             model = pickle.load(f)
             controllers.append((model_name,model))
-
+    ddpg = DDPGController(sim)
+    ddpg.load('controller/saved/DDPG/')
+    controllers.append(('DDPG',ddpg))
 
     stat = Statistics(sim, controllers)
     stat.print_result()

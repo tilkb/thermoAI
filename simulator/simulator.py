@@ -63,8 +63,12 @@ class Simulator:
         heating_power, curr_inside_temp = self.heat_model.step(self.weather.get_out_temperature(self.time_step_size_minute * self.current_time), action)
         self._last_heating_power = heating_power
         temp_from, temp_to = self.scheduler.get_target(self.time_step_size_minute * self.current_time)
-        not_satisfy_penalty = 0 if temp_from <= curr_inside_temp and temp_to >= curr_inside_temp else -1000000
-        reward = -power * self.price_scheduler.get_cost_at(self.time_step_size_minute * self.current_time) + not_satisfy_penalty
+        not_satisfy_penalty = 0 #if temp_from <= curr_inside_temp and temp_to >= curr_inside_temp else -1000000
+        consumption_penalty = -power / 1000.0 * self.price_scheduler.get_cost_at(self.time_step_size_minute * self.current_time) *(self.time_step_size_minute/60.0)
+        outside_penalty = -100*(temp_from-curr_inside_temp)**2 if temp_from > curr_inside_temp else 0 
+        outside_penalty += -100*(temp_to-curr_inside_temp)**2 if temp_to < curr_inside_temp else 0
+        reward =  consumption_penalty + outside_penalty + not_satisfy_penalty
+        #print(curr_inside_temp,'...',temp_from,'-',temp_to,'----->',power)
         self.total_cost += power * self.price_scheduler.get_cost_at(self.time_step_size_minute * self.current_time)
         self.current_time += 1
         self.historical_consuption.append(heating_power)
@@ -73,6 +77,7 @@ class Simulator:
         outside_temp = np.random.normal(loc=self.weather.get_out_temperature(self.time_step_size_minute * self.current_time), scale=self.temperature_noise_sigma)
         self.historical_outside_temp.append(outside_temp)
         done = self.weather.get_timeseries_length_minutes() <= self.time_step_size_minute * self.current_time
+        #done = self.current_time>150
         return done, reward, self._get_state()
 
     def _get_state(self):
@@ -85,3 +90,8 @@ class Simulator:
         previous_energy_consuption = self.historical_consuption[-self.prev_states_count:]
         return future_required_temperatures, future_outside_temperatures, future_energy_cost, previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption
 
+    def get_concated_features(self):
+        future_required_temperatures, future_outside_temperatures, future_energy_cost, previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption = self._get_state()
+        future_min = [x[0] for x in future_required_temperatures]
+        future_max = [x[1] for x in future_required_temperatures]
+        return future_min + future_max + future_outside_temperatures + future_energy_cost + previous_outside_temperatures + previous_inside_temperatures + previous_energy_consuption

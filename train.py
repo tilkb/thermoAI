@@ -1,6 +1,7 @@
 import pickle
 from simulator.simulator import Simulator
 from controller.PID.PIDController import PIDController
+from controller.RL.DDPG import DDPGController
 
 def train_pid(sim_file):
     sim = Simulator.from_json(sim_file)
@@ -8,13 +9,16 @@ def train_pid(sim_file):
     pid.train(sim, response_step_count=10)
     with open('controller/saved/PID.pkl', 'wb') as f:
         pickle.dump(pid, f)
-    print("saved PID saved...")
+    print("PID saved...")
 
-def train_rl():
-    pass
-
+def train_rl(sim_file):
+    sim = Simulator.from_json(sim_file)
+    ddpg = DDPGController(sim)
+    ddpg.train(sim)
+    ddpg.save('controller/saved/DDPG/')
+    print("DDPG saved...")
 
 
 if __name__== "__main__":
     train_pid("simulator/config/simulation1.json")
-    train_rl()
+    train_rl("simulator/config/simulation1.json")

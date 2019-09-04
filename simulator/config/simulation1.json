@@ -1,7 +1,7 @@
 {
     "simulation_step_size_minute":15,
-    "prev_states_feature": 20,
-    "next_states_feature": 20,
+    "prev_states_feature": 5,
+    "next_states_feature": 10,
     "temperature_noise_sigma":0.03,
     "power_noise_sigma":2,
     "weather_prediction_sigma":0.4,

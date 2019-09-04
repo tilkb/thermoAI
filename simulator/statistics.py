@@ -51,14 +51,14 @@ class Statistics:
                 cost += current_consumption * measure["energy_cost"]
                 reward+= measure["reward"]
             
-        print("________________________________________________")
-        print("Results for " + name)
-        print("Time spent out of range: {0} minute /{1} minute".format(out, total))
-        print("Total consumption [kWh]: {0}".format(consumption))
-        print("Total cost [HUF]: {0}".format(cost))
-        print("Weighted MSE error: {0}".format(mse_error))
-        print("Total reward: {0}".format(reward))
-        print("________________________________________________")
+            print("________________________________________________")
+            print("Results for " + name)
+            print("Time spent out of range: {0} minute /{1} minute".format(out, total))
+            print("Total consumption [kWh]: {0}".format(consumption))
+            print("Total cost [HUF]: {0}".format(cost))
+            print("Weighted MSE error: {0}".format(mse_error))
+            print("Total reward: {0}".format(reward))
+            print("________________________________________________")
         
     
     def plot(self):
