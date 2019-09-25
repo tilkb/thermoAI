@@ -90,7 +90,16 @@ class Statistics:
         for name, measures in self.stat:
             power = [m['heating_power'] for m in measures]
             inside = [m['inside_temperature'] for m in measures]
+            reward = [m['reward'] for m in measures]
     
+            r = go.Scatter(
+            x = time,
+            y = reward,
+            mode = 'lines',
+            name = 'Reward: ' + name,
+            yaxis = 'y2')
+            plots.append(r)
+
             p = go.Scatter(
             x = time,
             y = power,

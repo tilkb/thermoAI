@@ -15,7 +15,7 @@ def train_rl(sim_file):
     sim = Simulator.from_json(sim_file)
     ddpg = DDPGController(sim)
     ddpg.train(sim)
-    ddpg.save('controller/saved/DDPG/')
+    ddpg.save('controller/saved/DDPG2/')
     print("DDPG saved...")
 
 

@@ -14,7 +14,7 @@ def eval(sim_path, models_path):
             model = pickle.load(f)
             controllers.append((model_name,model))
     ddpg = DDPGController(sim)
-    ddpg.load('controller/saved/DDPG/')
+    ddpg.load('controller/saved/DDPG2/')
     controllers.append(('DDPG',ddpg))
 
     stat = Statistics(sim, controllers)
