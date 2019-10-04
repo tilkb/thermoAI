@@ -14,12 +14,41 @@ class PPOController:
             state = future_min + future_max + future_outside_temperatures + future_energy_cost + previous_outside_temperatures + previous_inside_temperatures + previous_energy_consuption
             tf_state = tf.constant(state, name="State")
             tf_state = tf.reshape(tf_state, (1, -1))
-            return self.ddpg.control(tf_state).numpy()[0, 0]
+            return self.ppo.control(tf_state).numpy()[0, 0]
 
     def train(self, simulator):
-        pass
+        self.ppo.train(simulator,)
 
 
+def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_value, sigma=0.0):
+    def collect_trajectory():
+        simulator.reset()
+        # reach initial state with enough history
+        for i in range(init_step):
+            simulator.step(0.0)
+        done = False
+        rewards, states, actions = [], [], []
+
+        while not(done):
+            state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
+            state = tf.reshape(state, (1, -1))
+            states.append(state)
+            act = (actor_model(state)).numpy()
+            act+= np.random.normal(loc=0.0, scale=sigma,size =act.shape)
+            action = np.clip(act, min_value, max_value)
+            done, reward, _ = simulator.step(action[0, 0])
+            rewards.append(reward)
+            actions.append(action)
+
+        #compute reward2go
+        R=0.0
+        corrected_rewards = []
+        for r in rewards[::-1]:
+            R=r+gamma*R
+            corrected_rewards.append(R)
+        corrected_rewards.reverse()
+        return states,actions, corrected_rewards
+    return [collect_trajectory() for i in range(count)]
 
 
 class PPO:
@@ -38,46 +67,34 @@ class PPO:
             tf.keras.layers.Dense(1)
         ], name="Critic")
 
-    def train(self, simulator, init_step=0, episode=30, batch_size=128, gamma=0.95):
-        def parallel_trajectory_collection(actor_model, count, sigma=0.0):
-            def collect_trajectory():
-                simulator.reset()
-                # reach initial state with enough history
-                for i in range(init_step):
-                    simulator.step(0.0)
-                done = False
-                rewards, states, actions = [], [], []
+    def train(self, simulator, init_step=0, episode=30, batch_size=128, gamma=0.95, grad_step=3, epsilon=0.1, exploration_decay=0.99):
 
-                while not(done):
-                    state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
-                    state = tf.reshape(state, (1, -1))
-                    states.append(state)
-                    act = (self.actor(state)).numpy() 
-                    act+= np.random.normal(loc=0.0, scale=sigma,act.shape)
-                    action = np.clip((act, self.min_value, self.max_value)
-                    done, reward, _ = simulator.step(action[0, 0])
-                    rewards.append(reward)
-                    actions.append(action)
-
-                #compute reward2go
-                R=0.0
-                corrected_rewards = []
-                for r in rewards[::-1]:
-                    R=r+gamma*R
-                    corrected_rewards.append(R)
-                corrected_rewards.reverse()
-                return states,actions, corrected_rewards
-            return [collect_trajectory() for i in range(count)]
 
         sigma=0.1
         optimizer = tf.keras.optimizers.Adam()
         for ep in range(episode):
-            trajectories = self.process_pool.map(parallel_trajectory_collection,[(self.actor,batch_size // mp.cpu_count())]* mp.cpu_count)
-            for timestep in range(len(trajectories[0])):
-                states = [traject[0][timestep] for traject in trajectories]
-                actions = [traject[1][timestep] for traject in trajectories]
-                rewards = [traject[2][timestep] for traject in trajectories]
+            self.process_pool.map(parallel_trajectory_collection,[(simulator,simulator,batch_size // mp.cpu_count(),self.min_value,self.max_value, sigma)])
+            trajectories = self.process_pool.map(parallel_trajectory_collection,[(simulator,self.actor,batch_size // mp.cpu_count(),self.min_value,self.max_value, sigma)] * mp.cpu_count())
+            states = [traject[0] for traject in trajectories]
+            actions = [traject[1] for traject in trajectories]
+            rewards = [traject[2] for traject in trajectories]
+            pi_old = self.actor(states)
+            for step in range(grad_step):
                 with tf.GradientTape() as tape:
-                    act_mean =self.critic(states)
+                    pi_new =self.actor(states)
+                    value = self.critic(states)
+                    ratio = tf.math.exp((2*actions*(pi_new-pi_old)+tf.math.square(pi_old)-tf.math.square(pi_new))/(2*sigma*sigma))
+                    clipped_ratio = tf.clip_by_value(ratio,1-epsilon,1+epsilon,name='PPO_Clip')
+                    advantage = rewards - value
+                    loss_actor = - tf.minimum(ratio*advantage,clipped_ratio*advantage)
+                    loss_critic = tf.keras.losses.MSE(rewards,value)
+                grad_actor = tape.gradient(loss_actor, self.actor.trainable_variables)
+                grad_critic = tape.gradient(loss_critic, self.critic.trainable_variables)
+                optimizer.apply_gradients(zip(grad_actor, self.actor.trainable_variables))
+                optimizer.apply_gradients(zip(grad_critic, self.critic.trainable_variables))
+            sigma = sigma*exploration_decay
 
-                    loss = 
+
+    def control(self,state):
+        action = np.clip(self.actor(state), self.min_value, self.max_value)
+        return action

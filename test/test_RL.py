@@ -5,6 +5,7 @@ sys.path.append(sys.path[0] +"/..")
 import numpy as np
 import gym
 from controller.RL.DDPG import DDPG
+from controller.RL.PPO import PPO
 
 
 class simulatorWrapper():
@@ -32,7 +33,15 @@ def full_training_DDPG():
     ddpg = DDPG(3,-2.0,2.0)
     ddpg.train(sim,init_step=0, episode=1000,batch_size=128)
 
+def full_training_PPO():
+    sim = simulatorWrapper(gym.make('Pendulum-v0'))
+    ppo = PPO(3, -2.0, 2.0)
+    ppo.train(sim, init_step=0, episode=1000, batch_size=128)
+
 
 if __name__== "__main__":
-  full_training_DDPG()
+  print('Train with DDPG')
+  #full_training_DDPG()
+  print('Train with PPO')
+  full_training_PPO()
 

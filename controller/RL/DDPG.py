@@ -18,7 +18,7 @@ class DDPGController:
         tf_state = tf.reshape(tf_state,(1,-1))
         return self.ddpg.control(tf_state)[0,0]
 
-    def q_estimation(,future_required_temperatures, future_outside_temperatures, future_energy_cost, previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption,action)
+    def q_estimation(self,future_required_temperatures, future_outside_temperatures, future_energy_cost, previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption,action):
         future_min = [x[0] for x in future_required_temperatures]
         future_max = [x[1] for x in future_required_temperatures]
         state = future_min + future_max + future_outside_temperatures + future_energy_cost + previous_outside_temperatures + previous_inside_temperatures + previous_energy_consuption
@@ -202,7 +202,6 @@ class DDPG:
                     
                     with tf.GradientTape() as tape:
                         y_pred = self.q_value(self.critic,state, action)
-                        #print('Q:',y_pred)
                         action_next = self.actor(next_state)
                         y_target = reward + gamma * self.q_value(target_critic,next_state, target_actor(next_state))
                         l = tf.keras.losses.Huber()
