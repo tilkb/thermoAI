@@ -1,3 +1,4 @@
+import tensorflow as tf
 import multiprocessing as mp
 
 class PPOController:
@@ -31,10 +32,15 @@ class PPO:
             tf.keras.layers.Dense(300, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
         ], name="Actor")
+        self.critic = tf.keras.Sequential([
+            tf.keras.layers.Dense(300, activation=tf.nn.relu, input_shape=(feature_size,)),
+            tf.keras.layers.Dense(300, activation=tf.nn.relu),
+            tf.keras.layers.Dense(1)
+        ], name="Critic")
 
     def train(self, simulator, init_step=0, episode=30, batch_size=128, gamma=0.95):
-        def parallel_trajectory_collection(actor_model, count):
-            def collect trajectory():
+        def parallel_trajectory_collection(actor_model, count, sigma=0.0):
+            def collect_trajectory():
                 simulator.reset()
                 # reach initial state with enough history
                 for i in range(init_step):
@@ -46,7 +52,9 @@ class PPO:
                     state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
                     state = tf.reshape(state, (1, -1))
                     states.append(state)
-                    action = np.clip((self.actor(state)).numpy(), self.min_value, self.max_value)
+                    act = (self.actor(state)).numpy() 
+                    act+= np.random.normal(loc=0.0, scale=sigma,act.shape)
+                    action = np.clip((act, self.min_value, self.max_value)
                     done, reward, _ = simulator.step(action[0, 0])
                     rewards.append(reward)
                     actions.append(action)
@@ -58,9 +66,18 @@ class PPO:
                     R=r+gamma*R
                     corrected_rewards.append(R)
                 corrected_rewards.reverse()
-                return states,actions,
+                return states,actions, corrected_rewards
+            return [collect_trajectory() for i in range(count)]
 
-
-
-        for ep in tqdm(range(episode)):
+        sigma=0.1
+        optimizer = tf.keras.optimizers.Adam()
+        for ep in range(episode):
             trajectories = self.process_pool.map(parallel_trajectory_collection,[(self.actor,batch_size // mp.cpu_count())]* mp.cpu_count)
+            for timestep in range(len(trajectories[0])):
+                states = [traject[0][timestep] for traject in trajectories]
+                actions = [traject[1][timestep] for traject in trajectories]
+                rewards = [traject[2][timestep] for traject in trajectories]
+                with tf.GradientTape() as tape:
+                    act_mean =self.critic(states)
+
+                    loss = 
