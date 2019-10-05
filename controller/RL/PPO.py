@@ -1,4 +1,6 @@
 import tensorflow as tf
+import numpy as np
+from tqdm import tqdm
 import multiprocessing as mp
 
 class PPOController:
@@ -20,7 +22,7 @@ class PPOController:
         self.ppo.train(simulator,)
 
 
-def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_value, sigma=0.0):
+def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_value, sigma=0.0, init_step=0, gamma=0.95):
     def collect_trajectory():
         simulator.reset()
         # reach initial state with enough history
@@ -32,15 +34,15 @@ def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_
         while not(done):
             state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
             state = tf.reshape(state, (1, -1))
-            states.append(state)
-            act = (actor_model(state)).numpy()
+            states.append(simulator.get_concated_features())
+            act = (actor_model(state)).numpy()[0,0]
             act+= np.random.normal(loc=0.0, scale=sigma,size =act.shape)
             action = np.clip(act, min_value, max_value)
-            done, reward, _ = simulator.step(action[0, 0])
+            done, reward, _ = simulator.step(action)
             rewards.append(reward)
             actions.append(action)
-
         #compute reward2go
+        print(sum(rewards))
         R=0.0
         corrected_rewards = []
         for r in rewards[::-1]:
@@ -53,44 +55,47 @@ def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_
 
 class PPO:
     def __init__(self, feature_size, min_value, max_value):
-        self.process_pool = mp.Pool(mp.cpu_count())
         self.min_value = min_value
         self.max_value = max_value
         self.actor = tf.keras.Sequential([
-            tf.keras.layers.Dense(300, activation=tf.nn.relu, input_shape=(feature_size,)),
-            tf.keras.layers.Dense(300, activation=tf.nn.relu),
+            tf.keras.layers.Dense(200, activation=tf.nn.relu, input_shape=(feature_size,)),
+            tf.keras.layers.Dense(200, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
         ], name="Actor")
         self.critic = tf.keras.Sequential([
-            tf.keras.layers.Dense(300, activation=tf.nn.relu, input_shape=(feature_size,)),
-            tf.keras.layers.Dense(300, activation=tf.nn.relu),
+            tf.keras.layers.Dense(200, activation=tf.nn.relu, input_shape=(feature_size,)),
+            tf.keras.layers.Dense(200, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
         ], name="Critic")
 
-    def train(self, simulator, init_step=0, episode=30, batch_size=128, gamma=0.95, grad_step=3, epsilon=0.1, exploration_decay=0.99):
-
-
-        sigma=0.1
+    def train(self, simulator, init_step=0, episode=30, batch_size=8, gamma=0.95, grad_step=20, epsilon=0.1, exploration_decay=0.99):
+        sigma=0.2
         optimizer = tf.keras.optimizers.Adam()
-        for ep in range(episode):
-            self.process_pool.map(parallel_trajectory_collection,[(simulator,simulator,batch_size // mp.cpu_count(),self.min_value,self.max_value, sigma)])
-            trajectories = self.process_pool.map(parallel_trajectory_collection,[(simulator,self.actor,batch_size // mp.cpu_count(),self.min_value,self.max_value, sigma)] * mp.cpu_count())
-            states = [traject[0] for traject in trajectories]
-            actions = [traject[1] for traject in trajectories]
-            rewards = [traject[2] for traject in trajectories]
+        huber_loss = tf.keras.losses.Huber()
+        for ep in tqdm(range(episode)):
+            trajectories = [parallel_trajectory_collection(simulator,self.actor,batch_size // mp.cpu_count(),self.min_value,self.max_value, sigma, init_step,gamma) for i in range(mp.cpu_count())]
+            trajectories = [val for traject in trajectories for val in traject]
+            states = [val for traject in trajectories for val in traject[0]]
+            actions = [val for traject in trajectories for val in traject[1]]
+            rewards = [val for traject in trajectories for val in traject[2]]
+            states = tf.constant(states, dtype=tf.float32)
+            actions = tf.reshape(tf.constant(actions, dtype=tf.float32),[-1,1])
+            rewards = tf.reshape(tf.constant(rewards, dtype=tf.float32),[-1,1])
+            #normalize rewards
+            rewards = (rewards - tf.reduce_mean(rewards)) / (tf.math.reduce_std(rewards) + 1e-5)
             pi_old = self.actor(states)
             for step in range(grad_step):
-                with tf.GradientTape() as tape:
-                    pi_new =self.actor(states)
+                with tf.GradientTape(persistent=True) as tape:
+                    pi_new = tf.clip_by_value(self.actor(states),self.min_value,self.max_value)
                     value = self.critic(states)
+                    advantage = rewards - value
                     ratio = tf.math.exp((2*actions*(pi_new-pi_old)+tf.math.square(pi_old)-tf.math.square(pi_new))/(2*sigma*sigma))
                     clipped_ratio = tf.clip_by_value(ratio,1-epsilon,1+epsilon,name='PPO_Clip')
-                    advantage = rewards - value
                     loss_actor = - tf.minimum(ratio*advantage,clipped_ratio*advantage)
-                    loss_critic = tf.keras.losses.MSE(rewards,value)
+                    loss_critic = huber_loss(rewards,value)
                 grad_actor = tape.gradient(loss_actor, self.actor.trainable_variables)
-                grad_critic = tape.gradient(loss_critic, self.critic.trainable_variables)
                 optimizer.apply_gradients(zip(grad_actor, self.actor.trainable_variables))
+                grad_critic = tape.gradient(loss_critic, self.critic.trainable_variables)
                 optimizer.apply_gradients(zip(grad_critic, self.critic.trainable_variables))
             sigma = sigma*exploration_decay
 

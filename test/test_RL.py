@@ -9,15 +9,17 @@ from controller.RL.PPO import PPO
 
 
 class simulatorWrapper():
-    def __init__(self,env):
+    def __init__(self,env, render=True):
         self.env = env
         self.env.seed(42)
         self.env.reset()
+        self.render = render
     
     def step(self, action):
         self.counter += 1
         self.state, reward, done, _ = self.env.step([action])
-        self.env.render()
+        if self.render:
+            self.env.render()
         done = done or self.counter>200
         return done, reward, self.state
 
@@ -29,14 +31,14 @@ class simulatorWrapper():
         return self.state
 
 def full_training_DDPG():
-    sim = simulatorWrapper(gym.make('Pendulum-v0'))
+    sim = simulatorWrapper(gym.make('Pendulum-v0'),True)
     ddpg = DDPG(3,-2.0,2.0)
     ddpg.train(sim,init_step=0, episode=1000,batch_size=128)
 
 def full_training_PPO():
-    sim = simulatorWrapper(gym.make('Pendulum-v0'))
+    sim = simulatorWrapper(gym.make('Pendulum-v0'), False)
     ppo = PPO(3, -2.0, 2.0)
-    ppo.train(sim, init_step=0, episode=1000, batch_size=128)
+    ppo.train(sim, init_step=0, episode=1000, batch_size=16)
 
 
 if __name__== "__main__":
