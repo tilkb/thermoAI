@@ -42,7 +42,6 @@ def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_
             rewards.append(reward)
             actions.append(action)
         #compute reward2go
-        print(sum(rewards))
         R=0.0
         corrected_rewards = []
         for r in rewards[::-1]:
@@ -68,8 +67,8 @@ class PPO:
             tf.keras.layers.Dense(1)
         ], name="Critic")
 
-    def train(self, simulator, init_step=0, episode=30, batch_size=8, gamma=0.95, grad_step=20, epsilon=0.1, exploration_decay=0.99):
-        sigma=0.2
+    def train(self, simulator, init_step=0, episode=30, batch_size=16, gamma=0.95, grad_step=30, epsilon=0.15, exploration_decay=0.98):
+        sigma=0.1
         optimizer = tf.keras.optimizers.Adam()
         huber_loss = tf.keras.losses.Huber()
         for ep in tqdm(range(episode)):
@@ -89,7 +88,7 @@ class PPO:
                     pi_new = tf.clip_by_value(self.actor(states),self.min_value,self.max_value)
                     value = self.critic(states)
                     advantage = rewards - value
-                    ratio = tf.math.exp((2*actions*(pi_new-pi_old)+tf.math.square(pi_old)-tf.math.square(pi_new))/(2*sigma*sigma))
+                    ratio = tf.math.exp((2*actions*(pi_new-pi_old)+tf.math.square(pi_old)-tf.math.square(pi_new))/(2*sigma*sigma+ 1e-5))
                     clipped_ratio = tf.clip_by_value(ratio,1-epsilon,1+epsilon,name='PPO_Clip')
                     loss_actor = - tf.minimum(ratio*advantage,clipped_ratio*advantage)
                     loss_critic = huber_loss(rewards,value)
@@ -101,5 +100,7 @@ class PPO:
 
 
     def control(self,state):
-        action = np.clip(self.actor(state), self.min_value, self.max_value)
+        state = tf.constant(state, dtype=tf.float32)
+        state = tf.reshape(state, (1, -1))
+        action = np.clip(self.actor(state).numpy()[0,0], self.min_value, self.max_value)
         return action
