@@ -62,8 +62,8 @@ def full_training_PPO():
     print("Solved from >=195")
 
 def full_training_SAC():
-    sim = simulatorWrapper(gym.make('Pendulum-v0'), True)
-    sac = SAC(3, -2.0, 2.0)
+    sim = simulatorWrapper(ContinuousCartPoleEnv(), True)
+    sac = SAC(4, -1.0, 1.0)
     sac.train(sim,init_step=0, episode=1000,batch_size=128)
 
 
