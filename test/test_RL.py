@@ -6,6 +6,7 @@ import numpy as np
 import gym
 from controller.RL.DDPG import DDPG
 from controller.RL.PPO import PPO
+from controller.RL.SAC import SAC
 from continous_cartpole import ContinuousCartPoleEnv
 
 
@@ -61,14 +62,16 @@ def full_training_PPO():
     print("Solved from >=195")
 
 def full_training_SAC():
-    pass
+    sim = simulatorWrapper(gym.make('Pendulum-v0'), True)
+    sac = SAC(3, -2.0, 2.0)
+    sac.train(sim,init_step=0, episode=1000,batch_size=128)
 
 
 if __name__== "__main__":
   print('Train with DDPG')
   #full_training_DDPG()
   print('Train with PPO')
-  full_training_PPO()
+  #full_training_PPO()
   print('Train with SAC')
   full_training_SAC()
 
