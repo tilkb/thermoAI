@@ -10,13 +10,13 @@ class SAC:
         self.policy = tf.keras.Sequential([
             tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size,)),
             tf.keras.layers.Dense(256, activation=tf.nn.relu),
-            tf.keras.layers.Dense(1, activation='tanh')
+            tf.keras.layers.Dense(1)
         ], name="Policy")
-        self.std = tf.keras.Sequential([
+        self.log_std = tf.keras.Sequential([
             tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size,)),
             tf.keras.layers.Dense(256, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
-        ], name="std")
+        ], name="Std_log")
         self.q1 = tf.keras.Sequential([
             tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size+1,)),
             tf.keras.layers.Dense(256, activation=tf.nn.relu),
@@ -32,8 +32,24 @@ class SAC:
             tf.keras.layers.Dense(256, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
         ], name="Value_network")
-    
-    def train(self,simulator,episode=1000, batch_size=64, gamma=0.95,init_step=0, alpha=0.2):
+
+    def _scale_action(self,action):
+        return (action+1)* ((self.max_value-self.min_value)/2) + self.min_value
+
+    def deterministic_action(self, state):
+        return self._scale_action(tf.math.tanh(self.policy(state)))
+
+    def get_sample(self,state):
+        min_std_log = -10
+        max_std_log = 3
+        distribution = tfp.distributions.Normal(loc=0, scale=1.0)
+        sample = distribution.sample(1)
+        sampled_action = tf.math.tanh(self.policy(state) + sample * tf.math.exp(tf.clip_by_value(self.log_std(state), min_std_log, max_std_log)))
+        log_prob = distribution.log_prob(sample) - tf.math.log(1-tf.math.square(sampled_action)+tf.keras.backend.epsilon())
+        return self._scale_action(sampled_action), log_prob
+
+    def train(self,simulator,episode=1000, batch_size=128, gamma=0.95,init_step=0, alpha=0.5):
+
         polyak = tf.constant([0.95])
         gamma = tf.constant([gamma])
         optimizer = tf.keras.optimizers.Adam()
@@ -51,9 +67,8 @@ class SAC:
                 #act in the simulator
                 state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
                 state = tf.reshape(state,(1,-1))
-                action_dist = tfp.distributions.Normal(loc=self.policy(state), scale=tf.clip_by_value(self.std(state),-,))
-                action = action_dist.sample(1)
-                done, reward, _ = simulator.step(action[0])
+                action, _ = self.get_sample(state)
+                done, reward, _ = simulator.step(action.numpy()[0,0])
                 sum_reward += reward
                 next_state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
                 if not(done):
@@ -69,10 +84,7 @@ class SAC:
                     reward = tf.reshape(tf.stack(batch.reward,axis=0),(batch_size,-1))
                     with tf.GradientTape(persistent=True) as tape:
                         y_q = reward+gamma*target_value_network(next_state)
-                        sample_dist = tfp.distributions.Normal(loc=self.policy(state), scale=self.std(state))
-                        sampled_action = tf.clip_by_value(sample_dist.sample(1),self.min_value, self.max_value)
-                        print(sampled_action)
-                        log_prob = sample_dist.log_prob(sampled_action)
+                        sampled_action, log_prob  = self.get_sample(state)
                         sampled_action = tf.reshape(sampled_action,(-1,1))
                         y_v = tf.minimum(self.q_value(self.q1,state,sampled_action),self.q_value(self.q2,state,sampled_action)) - alpha * log_prob
                         loss1 = tf.math.square(y_q-self.q_value(self.q1,state,action))
@@ -87,6 +99,8 @@ class SAC:
                     optimizer.apply_gradients(zip(grad_value, self.value.trainable_variables))
                     grad_policy = tape.gradient(loss_policy, self.policy.trainable_variables)
                     optimizer.apply_gradients(zip(grad_policy, self.policy.trainable_variables))
+                    grad_std = tape.gradient(loss_policy, self.log_std.trainable_variables)
+                    optimizer.apply_gradients(zip(grad_std, self.log_std.trainable_variables))
                     
                     #update target network
                     for var1, var2 in zip(target_value_network.trainable_variables,self.value.trainable_variables):
