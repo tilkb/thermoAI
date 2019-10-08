@@ -62,9 +62,12 @@ def full_training_PPO():
     print("Solved from >=195")
 
 def full_training_SAC():
-    sim = simulatorWrapper(ContinuousCartPoleEnv(), True)
+    sim = simulatorWrapper(ContinuousCartPoleEnv(), False)
     sac = SAC(4, -1.0, 1.0)
     sac.train(sim,init_step=0, episode=1000,batch_size=128)
+
+def full_training_iLQR():
+    pass
 
 
 if __name__== "__main__":
@@ -74,4 +77,6 @@ if __name__== "__main__":
   #full_training_PPO()
   print('Train with SAC')
   full_training_SAC()
+  print('Train with iLQR with learned model')
+  full_training_iLQR()
 
