@@ -8,35 +8,38 @@ class SAC:
         self.min_value = min_value
         self.max_value = max_value
         self.policy = tf.keras.Sequential([
-            tf.keras.layers.Dense(200, activation=tf.nn.relu, input_shape=(feature_size,)),
-            tf.keras.layers.Dense(200, activation=tf.nn.relu),
-            tf.keras.layers.Dense(1)
+            tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size,)),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu),
+            tf.keras.layers.Dense(1, activation='tanh')
         ], name="Policy")
+        self.std = tf.keras.Sequential([
+            tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size,)),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu),
+            tf.keras.layers.Dense(1)
+        ], name="std")
         self.q1 = tf.keras.Sequential([
-            tf.keras.layers.Dense(200, activation=tf.nn.relu, input_shape=(feature_size+1,)),
-            tf.keras.layers.Dense(200, activation=tf.nn.relu),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size+1,)),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
         ], name="Q1_network")
         self.q2 = tf.keras.Sequential([
-            tf.keras.layers.Dense(200, activation=tf.nn.relu, input_shape=(feature_size+1,)),
-            tf.keras.layers.Dense(200, activation=tf.nn.relu),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size+1,)),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
         ], name="Q2_network")
         self.value = tf.keras.Sequential([
-            tf.keras.layers.Dense(200, activation=tf.nn.relu, input_shape=(feature_size,)),
-            tf.keras.layers.Dense(200, activation=tf.nn.relu),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu, input_shape=(feature_size,)),
+            tf.keras.layers.Dense(256, activation=tf.nn.relu),
             tf.keras.layers.Dense(1)
         ], name="Value_network")
     
-    def train(self,simulator,episode=1000, batch_size=64, gamma=0.95,init_step=0,noise_decay=0.98, alpha=0.):
+    def train(self,simulator,episode=1000, batch_size=64, gamma=0.95,init_step=0, alpha=0.2):
         polyak = tf.constant([0.95])
-        noise = 0.1
         gamma = tf.constant([gamma])
         optimizer = tf.keras.optimizers.Adam()
         replay_memory = ReplayMemory(10000)
         target_value_network = tf.keras.models.clone_model(self.value)
         for ep in tqdm(range(episode)):
-            noise = noise*noise_decay
             simulator.reset()
             #reach initial state with enough history
             for i in range(init_step):
@@ -48,8 +51,8 @@ class SAC:
                 #act in the simulator
                 state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
                 state = tf.reshape(state,(1,-1))
-                action_dist = tfp.distributions.Normal(loc=self.policy(state), scale=noise)
-                action = tf.clip_by_value(action_dist.sample(1),self.min_value, self.max_value).numpy().reshape([1])
+                action_dist = tfp.distributions.Normal(loc=self.policy(state), scale=tf.clip_by_value(self.std(state),-,))
+                action = action_dist.sample(1)
                 done, reward, _ = simulator.step(action[0])
                 sum_reward += reward
                 next_state = tf.constant(simulator.get_concated_features(), dtype=tf.float32)
@@ -66,7 +69,7 @@ class SAC:
                     reward = tf.reshape(tf.stack(batch.reward,axis=0),(batch_size,-1))
                     with tf.GradientTape(persistent=True) as tape:
                         y_q = reward+gamma*target_value_network(next_state)
-                        sample_dist = tfp.distributions.Normal(loc=self.policy(state), scale=noise)
+                        sample_dist = tfp.distributions.Normal(loc=self.policy(state), scale=self.std(state))
                         sampled_action = tf.clip_by_value(sample_dist.sample(1),self.min_value, self.max_value)
                         print(sampled_action)
                         log_prob = sample_dist.log_prob(sampled_action)
