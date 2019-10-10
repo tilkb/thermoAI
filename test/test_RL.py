@@ -7,6 +7,7 @@ import gym
 from controller.RL.DDPG import DDPG
 from controller.RL.PPO import PPO
 from controller.RL.SAC import SAC
+from controller.RL.iLQR import iLQR
 from continous_cartpole import ContinuousCartPoleEnv
 
 
@@ -35,11 +36,9 @@ class simulatorWrapper():
 def full_training_DDPG():
     sim = simulatorWrapper(gym.make('Pendulum-v0'),True)
     ddpg = DDPG(3,-2.0,2.0)
-    ddpg.train(sim,init_step=0, episode=1000,batch_size=128)
+    ddpg.train(sim,init_step=0, episode=500,batch_size=128)
 
 def full_training_PPO():
-    #sim = simulatorWrapper(gym.make('Pendulum-v0'), False)
-    #ppo = PPO(3, -2.0, 2.0)
     sim = simulatorWrapper(ContinuousCartPoleEnv(), False)
     ppo = PPO(4, -1.0, 1.0)
     ppo.train(sim, init_step=0, episode=40)
@@ -62,12 +61,14 @@ def full_training_PPO():
     print("Solved from >=195")
 
 def full_training_SAC():
-    sim = simulatorWrapper(ContinuousCartPoleEnv(), False)
-    sac = SAC(4, -1.0, 1.0)
-    sac.train(sim,init_step=0, episode=1000,batch_size=128)
+    sim = simulatorWrapper(gym.make('Pendulum-v0'), True)
+    sac = SAC(3,-2.0,2.0)
+    sac.train(sim,init_step=0, episode=80,batch_size=128)
 
 def full_training_iLQR():
-    pass
+    sim = simulatorWrapper(ContinuousCartPoleEnv(), False)
+    model_based = iLQR(4, -1.0, 1.0)
+    model_based.train(sim)
 
 
 if __name__== "__main__":
@@ -78,5 +79,5 @@ if __name__== "__main__":
   print('Train with SAC')
   full_training_SAC()
   print('Train with iLQR with learned model')
-  full_training_iLQR()
+  #full_training_iLQR()
 

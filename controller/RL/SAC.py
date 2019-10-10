@@ -48,12 +48,12 @@ class SAC:
         log_prob = distribution.log_prob(sample) - tf.math.log(1-tf.math.square(sampled_action)+tf.keras.backend.epsilon())
         return self._scale_action(sampled_action), log_prob
 
-    def train(self,simulator,episode=1000, batch_size=128, gamma=0.95,init_step=0, alpha=0.5):
-
+    def train(self,simulator,episode=1000, batch_size=128, gamma=0.98,init_step=0, alpha=0.1):
+        huber_loss = tf.keras.losses.Huber()
         polyak = tf.constant([0.95])
         gamma = tf.constant([gamma])
         optimizer = tf.keras.optimizers.Adam()
-        replay_memory = ReplayMemory(10000)
+        replay_memory = ReplayMemory(20000)
         target_value_network = tf.keras.models.clone_model(self.value)
         for ep in tqdm(range(episode)):
             simulator.reset()
@@ -82,26 +82,38 @@ class SAC:
                     action = tf.reshape(tf.stack(batch.action,axis=0),(batch_size,-1))
                     next_state = tf.reshape(tf.stack(batch.next_state,axis=0),(batch_size,-1))
                     reward = tf.reshape(tf.stack(batch.reward,axis=0),(batch_size,-1))
+
                     with tf.GradientTape(persistent=True) as tape:
-                        y_q = reward+gamma*target_value_network(next_state)
-                        sampled_action, log_prob  = self.get_sample(state)
-                        sampled_action = tf.reshape(sampled_action,(-1,1))
-                        y_v = tf.minimum(self.q_value(self.q1,state,sampled_action),self.q_value(self.q2,state,sampled_action)) - alpha * log_prob
-                        loss1 = tf.math.square(y_q-self.q_value(self.q1,state,action))
-                        loss2 = tf.math.square(y_q-self.q_value(self.q2,state,action))
-                        loss_value = tf.math.square(y_v-self.value(state))
-                        loss_policy = -(self.q_value(self.q1,state,sampled_action)-alpha*log_prob)
+                        y_q = tf.stop_gradient(reward + gamma * target_value_network(next_state))
+                        q1 = self.q_value(self.q1,state,action)
+                        q2 = self.q_value(self.q2,state,action)
+                        loss1 = tf.math.reduce_mean(huber_loss(y_q,q1))
+                        loss2 = tf.math.reduce_mean(huber_loss(y_q,q2))
                     grad1 = tape.gradient(loss1, self.q1.trainable_variables)
                     optimizer.apply_gradients(zip(grad1, self.q1.trainable_variables))
                     grad2 = tape.gradient(loss2, self.q2.trainable_variables)
                     optimizer.apply_gradients(zip(grad2, self.q2.trainable_variables))
+
+                    del tape
+
+                    with tf.GradientTape(persistent=True) as tape:
+                        sampled_action, log_prob = self.get_sample(state)
+                        q1 = self.q_value(self.q1, state, sampled_action)
+                        min_q = tf.minimum(q1,
+                                           self.q_value(self.q2, state, sampled_action))
+                        y_v = tf.stop_gradient(min_q - alpha * log_prob)
+
+                        loss_value = tf.math.reduce_mean(huber_loss(y_v,self.value(state)))
+                        loss_policy = tf.reduce_mean(alpha*log_prob - q1)
+
                     grad_value = tape.gradient(loss_value, self.value.trainable_variables)
                     optimizer.apply_gradients(zip(grad_value, self.value.trainable_variables))
                     grad_policy = tape.gradient(loss_policy, self.policy.trainable_variables)
                     optimizer.apply_gradients(zip(grad_policy, self.policy.trainable_variables))
                     grad_std = tape.gradient(loss_policy, self.log_std.trainable_variables)
                     optimizer.apply_gradients(zip(grad_std, self.log_std.trainable_variables))
-                    
+                    del tape
+
                     #update target network
                     for var1, var2 in zip(target_value_network.trainable_variables,self.value.trainable_variables):
                         var1.assign(polyak * var1 + (1-polyak)* var2)
