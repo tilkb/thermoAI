@@ -77,7 +77,7 @@ if __name__== "__main__":
   print('Train with PPO')
   #full_training_PPO()
   print('Train with SAC')
-  full_training_SAC()
+  #full_training_SAC()
   print('Train with iLQR with learned model')
-  #full_training_iLQR()
+  full_training_iLQR()
 
