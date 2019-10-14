@@ -2,12 +2,14 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 import multiprocessing as mp
+import pickle
+import os
 
 class PPOController:
     def __init__(self, simulator):
         for i in range(50):
             simulator.step(0)
-        self.ppo = PPO()
+        self.ppo = PPO(len(simulator.get_concated_features()), 0.0, simulator.heat_model.get_max_heating_power())
 
     def control(self, future_required_temperatures, future_outside_temperatures, future_energy_cost,
                 previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption):
@@ -16,7 +18,15 @@ class PPOController:
             state = future_min + future_max + future_outside_temperatures + future_energy_cost + previous_outside_temperatures + previous_inside_temperatures + previous_energy_consuption
             tf_state = tf.constant(state, name="State")
             tf_state = tf.reshape(tf_state, (1, -1))
-            return self.ppo.control(tf_state).numpy()[0, 0]
+            return self.ppo.control(tf_state)
+
+    def save(self, path):
+        self.ppo.actor.save(path + 'PPO_actor.h5')
+        self.ppo.critic.save(path + 'PPO_critic.h5')
+
+    def load(self, path):
+        self.ppo.actor = tf.keras.models.load_model(path + 'PPO_actor.h5')
+        self.ppo.critic = tf.keras.models.load_model(path + 'PPO_critic.h5')
 
     def train(self, simulator):
         gamma =0.7
@@ -44,10 +54,14 @@ class PPOController:
                 state = simulator.get_concated_features()
                 state_data.append(state)
 
+            state_data = np.array(state_data, dtype=np.float32)
+            act_data = np.expand_dims(np.array(act_data, dtype=np.float32), axis=1)
+            dataset = tf.data.Dataset.from_tensor_slices((state_data, act_data))
+            self.ppo.pretrain_actor(dataset)
             #fit q value
             power = 0
             state_data=[]
-            q_data = []
+            v_data = []
             act_data = []
             done = False
             simulator.reset()
@@ -63,18 +77,16 @@ class PPOController:
                 act_data.append(normalized_power)
                 state = simulator.get_concated_features()
                 state_data.append(state)
-                q_data.append(reward)
-            for i in range(len(q_data)-2,-1,-1):
-                q_data[i]+=gamma*q_data[i+1]
+                v_data.append(reward)
+            for i in range(len(v_data)-2,-1,-1):
+                v_data[i]+=gamma*v_data[i+1]
 
             state_data=np.array(state_data,dtype=np.float32)
-            act_data = np.expand_dims(np.array(act_data,dtype=np.float32),axis=1)
-            state_action = np.concatenate((state_data,act_data), axis=1)
-            q_data = np.expand_dims(np.array(q_data,dtype=np.float32),axis=1)
-            q_value_dataset = tf.data.Dataset.from_tensor_slices((state_action,q_data))
-            self.ppo.pretrain_actor(dataset)
+            v_data = np.expand_dims(np.array(v_data,dtype=np.float32),axis=1)
+            value_dataset = tf.data.Dataset.from_tensor_slices((state_data,v_data))
+            self.ppo.pretrain_value(value_dataset)
 
-        self.ppo.train(simulator)
+        self.ppo.train(simulator, init_step=50)
 
 
 def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_value, sigma=0.0, init_step=0, gamma=0.95):    
@@ -103,6 +115,7 @@ def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_
             R=r+gamma*R
             corrected_rewards.append(R)
         corrected_rewards.reverse()
+        print(sum(corrected_rewards))
         return states,actions, corrected_rewards
     return [collect_trajectory() for i in range(count)]
 
@@ -122,17 +135,17 @@ class PPO:
             tf.keras.layers.Dense(1)
         ], name="Critic")
 
-    def pretrain_q(self,q_value_dataset,epoch=100, objective='mse'):
-        q_value_dataset = q_value_dataset.batch(64)
+    def pretrain_value(self,value_dataset,epoch=100, objective='mse'):
+        value_dataset = value_dataset.batch(64)
         self.critic.compile(loss=objective, optimizer='adam')
-        self.critic.fit(q_value_dataset, epochs=epoch)
+        self.critic.fit(value_dataset, epochs=epoch)
     
     def pretrain_actor(self,dataset, epoch=100, objective='mae'):
         dataset =dataset.batch(64)
         self.actor.compile(loss=objective, optimizer='adam')
         self.actor.fit(dataset, epochs=epoch)
 
-    def train(self, simulator, init_step=0, episode=30, batch_size=16, gamma=0.95, grad_step=30, epsilon=0.15, exploration_decay=0.98):
+    def train(self, simulator, init_step=0, episode=30, batch_size=32, gamma=0.95, grad_step=30, epsilon=0.15, exploration_decay=0.98):
         sigma=0.05*(self.max_value-self.min_value)
         optimizer = tf.keras.optimizers.Adam()
         huber_loss = tf.keras.losses.Huber()

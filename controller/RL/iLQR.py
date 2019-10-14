@@ -112,7 +112,7 @@ class iLQR:
         self.cost_model.fit(cost_data, epochs=epoch)
 
 
-    def train(self, simulator,warmup_time=100, episode=10, time_horizon=8):
+    def train(self, simulator,warmup_time=150, episode=20, time_horizon=15):
         #collect transitions to initialize the model
         for iteration in range(warmup_time):
             simulator.reset()

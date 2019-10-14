@@ -2,6 +2,7 @@ import pickle
 from simulator.simulator import Simulator
 from controller.PID.PIDController import PIDController
 from controller.RL.DDPG import DDPGController
+from controller.RL.PPO import PPOController
 
 def train_pid(sim_file):
     sim = Simulator.from_json(sim_file)
