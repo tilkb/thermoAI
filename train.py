@@ -13,6 +13,10 @@ def train_pid(sim_file):
 
 def train_rl(sim_file):
     sim = Simulator.from_json(sim_file)
+    ppo = PPOController(sim)
+    ppo.train(sim)
+    ppo.save('controller/saved/PPO/')
+    print("PPO saved...")
     ddpg = DDPGController(sim)
     ddpg.train(sim)
     ddpg.save('controller/saved/DDPG2/')

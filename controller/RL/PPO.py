@@ -19,10 +19,65 @@ class PPOController:
             return self.ppo.control(tf_state).numpy()[0, 0]
 
     def train(self, simulator):
-        self.ppo.train(simulator,)
+        gamma =0.7
+        #Pretrain
+        #collect data from PID controlling
+        simulator.reset()
+        for t in range(simulator.prev_states_count):
+                simulator.step(0)
+        with open('controller/saved/PID.pkl', 'rb') as f:
+            pid = pickle.load(f)
+        if os.path.isfile('controller/saved/PPO/PPO_actor.h5') and os.path.isfile('controller/saved/PPO/PPO_critic.h5'): 
+            self.load('controller/saved/PPO/')
+        else:
+            power = 0
+            state_data=[]
+            act_data = []
+            done = False
+            while not(done):
+                done,reward, (future_required_temperatures, future_outside_temperatures,future_energy_cost,
+                previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption) = simulator.step(power)
+                power = pid.control(future_required_temperatures, future_outside_temperatures,future_energy_cost,
+                previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption)
+                normalized_power = max(0,min(power,simulator.heat_model.get_max_heating_power()))
+                act_data.append(normalized_power)
+                state = simulator.get_concated_features()
+                state_data.append(state)
+
+            #fit q value
+            power = 0
+            state_data=[]
+            q_data = []
+            act_data = []
+            done = False
+            simulator.reset()
+            for i in range(simulator.prev_states_count):
+                simulator.step(0.0)
+            while not(done):
+                done,reward, (future_required_temperatures, future_outside_temperatures,future_energy_cost,
+                previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption) = simulator.step(power)
+                power = self.control(future_required_temperatures, future_outside_temperatures,future_energy_cost,
+                previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption)
+
+                power = max(0,min(power,simulator.heat_model.get_max_heating_power()))
+                act_data.append(normalized_power)
+                state = simulator.get_concated_features()
+                state_data.append(state)
+                q_data.append(reward)
+            for i in range(len(q_data)-2,-1,-1):
+                q_data[i]+=gamma*q_data[i+1]
+
+            state_data=np.array(state_data,dtype=np.float32)
+            act_data = np.expand_dims(np.array(act_data,dtype=np.float32),axis=1)
+            state_action = np.concatenate((state_data,act_data), axis=1)
+            q_data = np.expand_dims(np.array(q_data,dtype=np.float32),axis=1)
+            q_value_dataset = tf.data.Dataset.from_tensor_slices((state_action,q_data))
+            self.ppo.pretrain_actor(dataset)
+
+        self.ppo.train(simulator)
 
 
-def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_value, sigma=0.0, init_step=0, gamma=0.95):
+def parallel_trajectory_collection(simulator,actor_model, count, min_value, max_value, sigma=0.0, init_step=0, gamma=0.95):    
     def collect_trajectory():
         simulator.reset()
         # reach initial state with enough history
@@ -67,8 +122,18 @@ class PPO:
             tf.keras.layers.Dense(1)
         ], name="Critic")
 
+    def pretrain_q(self,q_value_dataset,epoch=100, objective='mse'):
+        q_value_dataset = q_value_dataset.batch(64)
+        self.critic.compile(loss=objective, optimizer='adam')
+        self.critic.fit(q_value_dataset, epochs=epoch)
+    
+    def pretrain_actor(self,dataset, epoch=100, objective='mae'):
+        dataset =dataset.batch(64)
+        self.actor.compile(loss=objective, optimizer='adam')
+        self.actor.fit(dataset, epochs=epoch)
+
     def train(self, simulator, init_step=0, episode=30, batch_size=16, gamma=0.95, grad_step=30, epsilon=0.15, exploration_decay=0.98):
-        sigma=0.1
+        sigma=0.05*(self.max_value-self.min_value)
         optimizer = tf.keras.optimizers.Adam()
         huber_loss = tf.keras.losses.Huber()
         for ep in tqdm(range(episode)):

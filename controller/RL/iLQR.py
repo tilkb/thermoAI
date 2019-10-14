@@ -8,13 +8,13 @@ class iLQR:
         self.max_value = max_value
         self.feature_size = feature_size
         self.transition_model = tf.keras.Sequential([
-            tf.keras.layers.Dense(128, activation=tf.nn.relu, input_shape=(feature_size+1,)),
-            tf.keras.layers.Dense(128, activation=tf.nn.tanh),
+            tf.keras.layers.Dense(64, activation=tf.nn.relu, input_shape=(feature_size+1,)),
+            tf.keras.layers.Dense(64, activation=tf.nn.tanh),
             tf.keras.layers.Dense(feature_size)
         ], name="Environment_model")
         self.cost_model = tf.keras.Sequential([
-            tf.keras.layers.Dense(128, activation=tf.nn.relu, input_shape=(feature_size+1,)),
-            tf.keras.layers.Dense(128, activation=tf.nn.tanh),
+            tf.keras.layers.Dense(32, activation=tf.nn.relu, input_shape=(feature_size+1,)),
+            tf.keras.layers.Dense(32, activation=tf.nn.tanh),
             tf.keras.layers.Dense(1)
         ], name="Cost_model")
 
@@ -60,8 +60,8 @@ class iLQR:
             u_seq_hat[t] = np.clip(u_seq[t] + alpha * control_dif, self.min_value, self.max_value)
             x = tf.reshape(tf.constant(x_seq_hat[t], dtype=tf.float32),[1,-1])
             u = tf.reshape(tf.constant(u_seq_hat[t], dtype=tf.float32),[1,-1])
-            input = tf.concat([x,u], axis=1)
-            x_seq_hat[t+1] = self.transition_model(input).numpy()
+            inp = tf.concat([x,u], axis=1)
+            x_seq_hat[t+1] = self.transition_model(inp).numpy()
         return x_seq_hat, u_seq_hat
 
     def get_derivatives(self,x,u):
@@ -87,9 +87,9 @@ class iLQR:
         x_seq = [sim.get_concated_features() for t in range(time_horizon)]
         done=False
         while not(done):
-            for i in range(5):
+            for i in range(3):
                 k_seq, kk_seq = self.backward(x_seq,u_seq)
-                x_seq,kk_seq = self.forward(x_seq,u_seq, k_seq, kk_seq)
+                x_seq,u_seq = self.forward(x_seq,u_seq, k_seq, kk_seq)
             state = tf.constant(sim.get_concated_features(), dtype=tf.float32)
 
             done, reward, _ = sim.step(u_seq[0][0])
@@ -100,7 +100,7 @@ class iLQR:
             self.collected_data[0].append(tf.reshape(tf.concat([tf.reshape(state, (1, -1)), tf.reshape(tf.constant(u_seq[0][0],dtype=tf.float32), (1, -1))], axis=-1), [-1]))
             self.collected_data[1].append(next_state)
             self.collected_data[2].append(reward)
-            print('.')
+            print('.',u_seq[0][0])
 
     def fit_model(self, epoch=1):
         state_action = np.array(self.collected_data[0])
@@ -112,7 +112,7 @@ class iLQR:
         self.cost_model.fit(cost_data, epochs=epoch)
 
 
-    def train(self, simulator,warmup_time=100, episode=10, time_horizon=50):
+    def train(self, simulator,warmup_time=100, episode=10, time_horizon=8):
         #collect transitions to initialize the model
         for iteration in range(warmup_time):
             simulator.reset()
@@ -128,7 +128,7 @@ class iLQR:
                 self.collected_data[1].append(next_state)
                 self.collected_data[2].append(reward)
 
-        self.fit_model(epoch=3)
+        self.fit_model(epoch=10)
         for iteration in tqdm(range(episode)):
             self.v = [0.0 for _ in range(time_horizon + 1)]
 
