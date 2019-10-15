@@ -29,7 +29,7 @@ class PPOController:
         self.ppo.critic = tf.keras.models.load_model(path + 'PPO_critic.h5')
 
     def train(self, simulator):
-        gamma =0.7
+        gamma =0.9
         #Pretrain
         #collect data from PID controlling
         simulator.reset()
@@ -145,8 +145,8 @@ class PPO:
         self.actor.compile(loss=objective, optimizer='adam')
         self.actor.fit(dataset, epochs=epoch)
 
-    def train(self, simulator, init_step=0, episode=30, batch_size=32, gamma=0.95, grad_step=30, epsilon=0.15, exploration_decay=0.98):
-        sigma=0.05*(self.max_value-self.min_value)
+    def train(self, simulator, init_step=0, episode=50, batch_size=32, gamma=0.95, grad_step=30, epsilon=0.1, exploration_decay=0.98):
+        sigma=0.01*(self.max_value-self.min_value)
         optimizer = tf.keras.optimizers.Adam()
         huber_loss = tf.keras.losses.Huber()
         for ep in tqdm(range(episode)):
