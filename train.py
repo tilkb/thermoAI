@@ -3,6 +3,7 @@ from simulator.simulator import Simulator
 from controller.PID.PIDController import PIDController
 from controller.RL.DDPG import DDPGController
 from controller.RL.PPO import PPOController
+from controller.RL.SAC import SACController
 
 def train_pid(sim_file):
     sim = Simulator.from_json(sim_file)
@@ -14,13 +15,18 @@ def train_pid(sim_file):
 
 def train_rl(sim_file):
     sim = Simulator.from_json(sim_file)
+    sac = SACController(sim)
+    sac.train(sim)
+    sac.save('controller/saved/SAC/')
+
     ppo = PPOController(sim)
     ppo.train(sim)
     ppo.save('controller/saved/PPO/')
     print("PPO saved...")
+
     ddpg = DDPGController(sim)
     ddpg.train(sim)
-    ddpg.save('controller/saved/DDPG2/')
+    ddpg.save('controller/saved/DDPG/')
     print("DDPG saved...")
 
 

@@ -3,6 +3,32 @@ import tensorflow_probability as tfp
 from tqdm import tqdm
 from controller.RL.utils.common import ReplayMemory, Transition
 
+class SACController:
+    def __init__(self, simulator):
+        for i in range(50):
+            simulator.step(0)
+        self.sac = SAC(len(simulator.get_concated_features()), 0.0, simulator.heat_model.get_max_heating_power())
+
+    def control(self, future_required_temperatures, future_outside_temperatures, future_energy_cost,
+                previous_outside_temperatures, previous_inside_temperatures, previous_energy_consuption):
+            future_min = [x[0] for x in future_required_temperatures]
+            future_max = [x[1] for x in future_required_temperatures]
+            state = future_min + future_max + future_outside_temperatures + future_energy_cost + previous_outside_temperatures + previous_inside_temperatures + previous_energy_consuption
+            tf_state = tf.constant(state, name="State")
+            tf_state = tf.reshape(tf_state, (1, -1))
+            return self.sac.control(tf_state)
+
+    def save(self, path):
+        self.sac.policy.save(path + 'SAC_policy.h5')
+
+    def load(self, path):
+        self.sac.policy = tf.keras.models.load_model(path + 'SAC_policy.h5')
+
+    def train(self, simulator):
+        self.sac.train(simulator, init_step=20)
+
+
+
 class SAC:
     def __init__(self, feature_size, min_value, max_value):
         self.min_value = min_value
@@ -118,8 +144,11 @@ class SAC:
                     for var1, var2 in zip(target_value_network.trainable_variables,self.value.trainable_variables):
                         var1.assign(polyak * var1 + (1-polyak)* var2)
             print(sum_reward)
-    
-    
+
+    def control(self, state):
+        action = np.clip(self._scale_action(self.policy(state)), self.min_value, self.max_value)
+        return action
+
     #@tf.function
     def q_value(self,model,state, action):
         concated = tf.concat([state, action], axis=-1)

@@ -37,8 +37,8 @@ class DDPGController:
         done = False
         with open('controller/saved/PID.pkl', 'rb') as f:
             pid = pickle.load(f)
-        if os.path.isfile('controller/saved/DDPG/DDPG_actor.h5') and os.path.isfile('controller/saved/DDPG/DDPG_critic.h5'): 
-            self.load('controller/saved/DDPG/')
+        if os.path.isfile('controller/saved/DDPG_pretrain/DDPG_actor.h5') and os.path.isfile('controller/saved/DDPG_pretrain/DDPG_critic.h5'):
+            self.load('controller/saved/DDPG_pretrain/')
         else:
             power = 0
             state_data=[]
@@ -158,14 +158,14 @@ class DDPG:
             self.actor.fit(dataset, epochs=epoch)
 
     
-    def train(self, simulator, init_step=0,episode=10, batch_size=256, gamma=0.95):
+    def train(self, simulator, init_step=0,episode=5, batch_size=256, gamma=0.95):
         gamma = tf.constant([gamma])
         optimizer = tf.keras.optimizers.Adam(0.000002)
         replay_memory = ReplayMemory(400)
         commulative_reward_history = []
         target_actor = tf.keras.models.clone_model(self.actor)
         target_critic = tf.keras.models.clone_model(self.critic)
-        noise = 0.003
+        noise = 0.001
         noise_decay=0.98
         polyak = tf.constant([0.95])
         for ep in tqdm(range(episode)):

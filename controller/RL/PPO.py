@@ -37,8 +37,8 @@ class PPOController:
                 simulator.step(0)
         with open('controller/saved/PID.pkl', 'rb') as f:
             pid = pickle.load(f)
-        if os.path.isfile('controller/saved/PPO/PPO_actor.h5') and os.path.isfile('controller/saved/PPO/PPO_critic.h5'): 
-            self.load('controller/saved/PPO/')
+        if os.path.isfile('controller/saved/PPO_pretrain/PPO_actor.h5') and os.path.isfile('controller/saved/PPO_pretrain/PPO_critic.h5'):
+            self.load('controller/saved/PPO_pretrain/')
         else:
             power = 0
             state_data=[]
@@ -145,7 +145,7 @@ class PPO:
         self.actor.compile(loss=objective, optimizer='adam')
         self.actor.fit(dataset, epochs=epoch)
 
-    def train(self, simulator, init_step=0, episode=50, batch_size=32, gamma=0.95, grad_step=30, epsilon=0.1, exploration_decay=0.98):
+    def train(self, simulator, init_step=0, episode=10, batch_size=64, gamma=0.95, grad_step=80, epsilon=0.2, exploration_decay=0.98):
         sigma=0.01*(self.max_value-self.min_value)
         optimizer = tf.keras.optimizers.Adam()
         huber_loss = tf.keras.losses.Huber()

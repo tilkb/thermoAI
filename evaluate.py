@@ -4,6 +4,7 @@ from simulator.statistics import Statistics
 from simulator.simulator import Simulator
 from controller.RL.DDPG import DDPGController
 from controller.RL.PPO import PPOController
+from controller.RL.SAC import SACController
 
 def eval(sim_path, models_path):
     sim=Simulator.from_json(sim_path)
@@ -15,14 +16,12 @@ def eval(sim_path, models_path):
             model = pickle.load(f)
             controllers.append((model_name,model))
     ddpg = DDPGController(sim)
-    ddpg.load('controller/saved/DDPG2/')
+    ddpg.load('controller/saved/DDPG/')
     controllers.append(('DDPG',ddpg))
 
     ppo = PPOController(sim)
     ppo.load('controller/saved/PPO/')
     controllers.append(('PPO',ppo))
-
-
 
     stat = Statistics(sim, controllers)
     stat.print_result()

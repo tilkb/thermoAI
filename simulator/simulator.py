@@ -63,10 +63,10 @@ class Simulator:
         heating_power, curr_inside_temp = self.heat_model.step(self.weather.get_out_temperature(self.time_step_size_minute * self.current_time), action)
         self._last_heating_power = heating_power
         temp_from, temp_to = self.scheduler.get_target(self.time_step_size_minute * self.current_time)
-        not_satisfy_penalty = 0 #if temp_from <= curr_inside_temp and temp_to >= curr_inside_temp else -1000000
-        consumption_penalty = 0#-power / 1000.0 * self.price_scheduler.get_cost_at(self.time_step_size_minute * self.current_time) *(self.time_step_size_minute/60.0)
-        outside_penalty = -1*abs(temp_from-curr_inside_temp) if temp_from > curr_inside_temp else 0 
-        outside_penalty += -1*abs(temp_to-curr_inside_temp) if temp_to < curr_inside_temp else 0
+        not_satisfy_penalty =0# if temp_from <= curr_inside_temp and temp_to >= curr_inside_temp else -100
+        consumption_penalty = -0.1* ( power / 1000.0 * self.price_scheduler.get_cost_at(self.time_step_size_minute * self.current_time) *(self.time_step_size_minute/60.0))
+        outside_penalty = -5*abs(temp_from-curr_inside_temp) if temp_from > curr_inside_temp else 0
+        outside_penalty += -15*abs(temp_to-curr_inside_temp) if temp_to < curr_inside_temp else 0
         reward =  consumption_penalty + outside_penalty + not_satisfy_penalty
         #print(curr_inside_temp,'...',temp_from,'-',temp_to,'----->',power)
         self.total_cost += power * self.price_scheduler.get_cost_at(self.time_step_size_minute * self.current_time)
@@ -77,7 +77,7 @@ class Simulator:
         outside_temp = np.random.normal(loc=self.weather.get_out_temperature(self.time_step_size_minute * self.current_time), scale=self.temperature_noise_sigma)
         self.historical_outside_temp.append(outside_temp)
         done = self.weather.get_timeseries_length_minutes() <= self.time_step_size_minute * self.current_time
-        done = self.current_time>200
+        #done = self.current_time>300
         return done, reward, self._get_state()
 
     def _get_state(self):
