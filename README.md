@@ -54,7 +54,7 @@ Problems:
     * Weather: I used Basel hourly temperature from 2016-2017 winter
     * Energy cost: Hungarian daytime and night time pricing is used
 
-As this is the most important part of the RL pipeline, it is very important to be bug-free, so sufficient unit test is needed.
+As this is the most important part of the RL pipeline, it is very important to be bug-free, so sufficient unit tests are needed.
 
 ### PID Controller
 The simulator is linear, so PID should solve the controlling nearly optimal. However, it doesn't use the information about the energy price --> it may suboptimal
@@ -66,7 +66,7 @@ Problems
 Otherwise, this is not too complicated as the heating system model is linear 
 
 ![alt text](img/PID_heat.png "PID heating charasteristics")
-This figure shows PID controlls the temperature almost perfectly. The orange part shows the required inside temperature interval. 
+This figure shows the PID control the temperature almost perfectly. The orange part shows the required inside temperature interval. 
 
 ### Imitation learning
 
@@ -92,27 +92,28 @@ This problem can be eliminated by learning the policy first and use the learned 
 My intuition: MAE performs the best as the system is fully linear. 
 
 ### Model-Free reinforcement learning
-In my experience, the heating problem is way too complicated for model free-RL. That is why not converging not necceseraly means that the implementation wrong.
-I used OpenAI gym inverted pendulum and continuous cartpole task to check convergence. The algorithms works for the given task. This can be unit test of the implementation.
+In my experience, the heating problem is way too complicated for model free-RL. That is why not converging not necessarily means that the implementation wrong.
+I used OpenAI gym inverted pendulum and continuous cartpole task to check convergence. The algorithms work for the given tasks. This can be the unit test of the implementation.
 
 Without any further trick the model tends to predict one of the corner case of the valid interval.
-Due to the previous reasons I decided to use pre-training for the models. The baseline is the PID and imitation learning is used as a pretrained-model can see in the previous section.
+Due to the previous reasons, I decided to use pre-training for the models. The baseline is the PID and imitation learning is used as a pretrained-model can see in the previous section.
 
 Implemented methods:
 * [DDPG](https://arxiv.org/pdf/1509.02971.pdf) 
 
 ![alt text](img/ddpg_train.png "Trained DDPG")
-* [SAC](https://arxiv.org/pdf/1801.01290.pdf): State-of-the-art model-free RL method handles the exporation as well and converge really fast on inverted pendulum problem. Pretraining is a bit more difficult in this case due to the 6 different networks.
+* [SAC](https://arxiv.org/pdf/1801.01290.pdf): State-of-the-art model-free RL method handles the exploration as well and converges really fast on inverted pendulum problem. Pretraining is a bit more difficult in this case due to the 6 different networks.
 
 * [PPO](https://arxiv.org/pdf/1707.06347.pdf) 
 ![alt text](img/ppo_train.png "Trained PPO") This is an on-policy algorithm with some constraint, which provides to not moving too far from the current policy. This is why it seems like a more stable method for pre-training.
 
 
 The results show that even the pre-training model-free RL not working perfectly (yet), but pre-trained PPO is able to control the system more or less, but not optimally. 
-Training the models further result that the control increase the inside temperature further, which is very odd. Furthermore, these methods tend to broke later and provide the maximum or the minimum heating power during the controlling process, which is very similar to the model-free RL from scratch case.
+Training the models further result that the control increases the inside temperature further, which is very odd. Furthermore, these methods tend to broke later and provide the maximum or the minimum heating power during the controlling process, which is very similar to the model-free RL from scratch case.
 
 See the interactive plots [here](heating_plot.html)
-###Model-based reinforcement learning
+
+### Model-based reinforcement learning
 iLQR method is really slow. The main advantage is able to converge faster than SAC, if not counting the model-learning steps, which are passive steps.
 Interesting discovery: TF2.0 can calculate the Hessian matrix (d cost/dd input), which is required, but the network must contain non-ReLu activation as well because the hessian of ReLu network will be zero matrix.
 Anyway, model-based RL is cool, but speeding up is required in inference time, which can be solved with Guided Policy Search.
